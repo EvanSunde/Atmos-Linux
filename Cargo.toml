@@ -1,0 +1,13 @@
+[package]
+name = "atmos-render"
+version = "0.1.0"
+edition = "2021"
+description = "Real-time Dolby Atmos decoder (E-AC-3 + JOC, TrueHD) rendering to 7.1.4 PCM"
+license-file = "LICENSE.md"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+codegen-units = 16
+debug = false
