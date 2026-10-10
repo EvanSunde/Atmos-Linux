@@ -4,7 +4,7 @@ A native, real-time Dolby Atmos decoder for Linux. It reads a raw **E-AC-3 + JOC
 (streaming services, Atmos music) or a **TrueHD Atmos** stream (Blu-ray) and writes 7.1.4 PCM
 (12-channel interleaved float32: `FL FR FC LFE RL RR SL SR TFL TFR TRL TRR`). That output plugs
 straight into the "Atmos Headphones" PipeWire sink of linux-atmos. It needs no .NET and no
-runtime: it's one ~2 MB static-ish binary.
+runtime: it's one ~2 MB binary that only needs glibc 2.34 or newer.
 
 ```sh
 ffmpeg -i song.m4a -map 0:a:0 -c copy -f eac3 - | atmos-render - |
