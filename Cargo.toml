@@ -6,8 +6,13 @@ description = "Real-time Dolby Atmos decoder (E-AC-3 + JOC, TrueHD) rendering to
 license-file = "LICENSE.md"
 
 [dependencies]
+truehd = "0.7.2"
 
 [profile.release]
 opt-level = 3
 codegen-units = 16
 debug = false
+
+# The truehd crate needs >6 GB of RAM to compile optimised; on smaller machines keep this.
+[profile.release.package.truehd]
+opt-level = 0

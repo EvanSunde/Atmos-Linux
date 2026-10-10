@@ -40,6 +40,8 @@ pub struct ObjectBlock {
     pub positions: Vec<[f32; 3]>,
     /// Per object, Cavern `Source.Volume`.
     pub volumes: Vec<f32>,
+    /// Per object, Cavern `Source.Size` (0 until OAMD sets it; relative to the environment, 0 = point).
+    pub sizes: Vec<f32>,
     /// Per object samples (LFE inserted at its position, as Cavern).
     pub samples: Vec<[f32; 64]>,
 }
@@ -297,6 +299,7 @@ impl ObjectDecoder {
         self.out.push_back(ObjectBlock {
             positions: self.sources.iter().map(|s| s.position.to_array()).collect(),
             volumes: self.sources.iter().map(|s| s.volume).collect(),
+            sizes: self.sources.iter().map(|s| s.size).collect(),
             samples: self.object_samples.clone(),
         });
     }

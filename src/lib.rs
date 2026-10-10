@@ -4,3 +4,7 @@
 pub mod bits;
 pub mod eac3;
 pub mod objects;
+pub mod render;
+pub mod eac3_render;
+pub mod truehd;
+pub mod cavern_render;

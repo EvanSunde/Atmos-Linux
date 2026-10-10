@@ -1,0 +1,38 @@
+diff --git a/Cavern.Format/Decoders/EnhancedAC3Decoder.cs b/Cavern.Format/Decoders/EnhancedAC3Decoder.cs
+index a15f786..2b9df2a 100644
+--- a/Cavern.Format/Decoders/EnhancedAC3Decoder.cs
++++ b/Cavern.Format/Decoders/EnhancedAC3Decoder.cs
+@@ -29,6 +29,12 @@ namespace Cavern.Format.Decoders {
+         /// </summary>
+         public int FrameSize => header.Blocks * samplesPerBlock;
+ 
++        public static Action<int, byte[]> RefAuxTap;
++
++        public float[] RefDecodeFrame() => DecodeFrame();
++
++        public ReferenceChannel[] RefSortedChannels() => outputs.Keys.OrderBy(x => x).ToArray();
++
+         /// <summary>
+         /// Header data container and reader.
+         /// </summary>
+@@ -109,6 +115,7 @@ namespace Cavern.Format.Decoders {
+                     outputs[ReferenceChannel.ScreenLFE] = body.LFEResult;
+                 }
+ 
++                RefAuxTap?.Invoke(header.SubstreamID, body.RefAuxRaw());
+                 Extensions.Decode(body.GetAuxData());
+                 ReadHeader();
+             } while (header.SubstreamID != 0);
+diff --git a/Cavern.Format/Transcoders/EnhancedAC3Body.cs b/Cavern.Format/Transcoders/EnhancedAC3Body.cs
+index 887ddbc..86d5085 100644
+--- a/Cavern.Format/Transcoders/EnhancedAC3Body.cs
++++ b/Cavern.Format/Transcoders/EnhancedAC3Body.cs
+@@ -93,6 +93,8 @@ namespace Cavern.Format.Transcoders {
+         /// </summary>
+         public BitExtractor GetAuxData() => new BitExtractor(auxData, auxDataPos);
+ 
++        internal byte[] RefAuxRaw() { byte[] r = new byte[auxDataPos]; System.Array.Copy(auxData, r, auxDataPos); return r; }
++
+         /// <summary>
+         /// Create or reuse per-channel outputs and separate auxillary bitstream.
+         /// </summary>

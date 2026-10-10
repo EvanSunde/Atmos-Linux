@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>disable</Nullable><ImplicitUsings>enable</ImplicitUsings><InvariantGlobalization>true</InvariantGlobalization></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../../Cavern/Cavern.Format/Cavern.Format.csproj" /></ItemGroup>
+</Project>
