@@ -44,10 +44,10 @@ fn eac3_sync(buf: &[u8]) -> Option<usize> {
 /// Detects the stream type: TrueHD by two major syncs (0xF8726FBA), E-AC-3 by two consecutive
 /// sync words one frame apart. Either alone can occur by chance inside the other format.
 fn detect(buf: &[u8], eof: bool) -> Option<Format> {
-    // TrueHD: a major sync confirmed by another one shortly after (one every 16-128 access units)
+    // TrueHD: a major sync confirmed by another one shortly after (one every 16-128 access units, up to ~100 KB apart)
     const MAJOR: [u8; 4] = [0xF8, 0x72, 0x6F, 0xBA];
     let thd = buf.windows(4).position(|w| w == MAJOR).filter(|&p| {
-        buf[p + 4..].windows(4).take(16 * 1024).any(|w| w == MAJOR)
+        buf[p + 4..].windows(4).take(512 * 1024).any(|w| w == MAJOR)
     });
     let ac3 = eac3_sync(buf);
     match (ac3, thd) {
@@ -55,7 +55,7 @@ fn detect(buf: &[u8], eof: bool) -> Option<Format> {
         (None, Some(_)) => Some(Format::TrueHd),
         // E-AC-3 needs no more evidence once confirmed; wait a little for a TrueHD major sync
         // (one every 16-128 access units, so within a few KB) before deciding.
-        (Some(_), None) if buf.len() > 64 * 1024 || eof => Some(Format::Eac3),
+        (Some(_), None) if buf.len() > 600 * 1024 || eof => Some(Format::Eac3),
         _ => None,
     }
 }
@@ -100,7 +100,7 @@ fn main() {
             let n = reader.read(&mut chunk).unwrap_or(0);
             prefix.extend_from_slice(&chunk[..n]);
             if let Some(f) = detect(&prefix, n == 0) { break f; }
-            if n == 0 || prefix.len() > 1 << 20 { fail("no E-AC-3 or TrueHD stream found in the input"); }
+            if n == 0 || prefix.len() > 2 << 20 { fail("no E-AC-3 or TrueHD stream found in the input"); }
         },
     };
     let out = io::stdout().lock();

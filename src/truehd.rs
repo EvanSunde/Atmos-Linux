@@ -268,6 +268,14 @@ pub fn run<R: Read, W: Write>(prefix: &[u8], input: R, out: W, gain: f32) -> io:
     let mut chunk = vec![0u8; 1 << 16];
     let mut input = io::Cursor::new(prefix.to_vec()).chain(input);
 
+    // A stream cut mid-way (a seek in a player) usually starts with access units that can't be
+    // decoded yet: decoding needs a major sync, which comes every 16-128 units and in Matroska
+    // often sits inside a lace. Walk those units by their length field, count them, and play
+    // silence for them, so the output stays sample-aligned with the cut point.
+    let (head, skipped) = skip_to_major_sync(&mut input)?;
+    sink.lost = skipped;
+    let mut input = io::Cursor::new(head).chain(input);
+
     loop {
         let n = match input.read(&mut chunk) {
             Ok(0) => break,
@@ -341,5 +349,41 @@ mod tests {
             println!("ch{ch:2} {k:5} pos {:?} gain {:.2} -> {:?}", s.p, s.p[3], top(&s.gains()));
         }
         assert!(matches!(r.tracks[0].to.kind, Kind::Bed(3)));
+    }
+}
+
+const MAJOR_SYNC: [u8; 4] = [0xF8, 0x72, 0x6F, 0xBA];
+
+/// Reads until the first access unit that carries a major sync. Returns the bytes from that
+/// unit on, and how many whole access units came before it. If the units can't be walked
+/// (not starting on a unit boundary), falls back to searching for the sync pattern and reports 0.
+fn skip_to_major_sync<R: Read>(input: &mut R) -> io::Result<(Vec<u8>, usize)> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 1 << 16];
+    let (mut pos, mut units) = (0usize, 0usize);
+    loop {
+        // Walk complete unit headers that are already buffered
+        while pos + 8 <= buf.len() {
+            if buf[pos + 4..pos + 8] == MAJOR_SYNC {
+                return Ok((buf.split_off(pos), units));
+            }
+            let len = ((((buf[pos] & 0x0F) as usize) << 8) | buf[pos + 1] as usize) * 2;
+            if len < 4 {
+                // Not a unit boundary: let the extractor find the sync itself.
+                return Ok((buf, 0));
+            }
+            pos += len;
+            units += 1;
+        }
+        let n = loop {
+            match input.read(&mut chunk) {
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                r => break r?,
+            }
+        };
+        if n == 0 || buf.len() > 8 << 20 {
+            return Ok((buf, 0)); // no major sync found: decode what there is
+        }
+        buf.extend_from_slice(&chunk[..n]);
     }
 }
