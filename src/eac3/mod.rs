@@ -205,7 +205,17 @@ impl Eac3Decoder {
                 return if self.input_done { Fetch::End } else { Fetch::NeedData };
             }
             match Header::peek(&self.buf[self.pos..self.pos + MUST_DECODE]) {
-                Ok(Peek::End) => return Fetch::End,
+                // Cavern reads zero padding past the end of a file as "end of stream". In a live
+                // stream zero bytes before a frame (e.g. a cut mid-frame) are just junk: resync.
+                Ok(Peek::End) if self.input_done => return Fetch::End,
+                Ok(Peek::End) => {
+                    self.pos += 1;
+                    while self.pos + 1 < self.buf.len()
+                        && !(self.buf[self.pos] == 0x0B && self.buf[self.pos + 1] == 0x77)
+                    {
+                        self.pos += 1;
+                    }
+                }
                 Ok(Peek::Frame { bytes, substream_id }) => {
                     if full && avail < bytes {
                         return if self.input_done { Fetch::End } else { Fetch::NeedData };

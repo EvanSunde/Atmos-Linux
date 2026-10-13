@@ -13,6 +13,9 @@ opt-level = 3
 codegen-units = 16
 debug = false
 
-# The truehd crate needs >6 GB of RAM to compile optimised; on smaller machines keep this.
-[profile.release.package.truehd]
-opt-level = 0
+# Compiling the truehd crate fully optimised needs a lot of RAM (> 6 GB). If the build is
+# killed for lack of memory, reduce MIR inlining for that crate only (about 5 GB, same speed):
+#   RUSTC_BOOTSTRAP=1 RUSTC_WRAPPER=tools/rustc-truehd-wrapper.sh cargo build --release
+# or, as a last resort, uncomment this (TrueHD then decodes ~10x slower):
+# [profile.release.package.truehd]
+# opt-level = 0
