@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# atmos-stream <file> <stream-index> <start-seconds> [timeline-shift]
+# Real-time Atmos decode from <start-seconds>: writes a NUT stream (12-ch WavPack, 7.1.4) to
+# stdout whose timestamps match the film, so mpv can play it as the audio track.
+#   E-AC-3 + JOC and TrueHD Atmos -> atmos-render (native, no runtime)
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"   # also when mpv was started from the desktop
+in="$1" idx="$2" t="$3" shift="${4:-0}"   # output timestamps = file timestamps - shift
+
+probe() { ffprobe -v error -select_streams "$idx" -show_entries "stream=$1" -of default=nw=1:nk=1 "$in" | head -n1; }
+codec=$(probe codec_name)
+rate=$(probe sample_rate)
+case $codec in
+    eac3)   fmt=eac3 ;;
+    truehd) fmt=truehd ;;
+    *) echo "atmos-stream: unsupported codec $codec" >&2; exit 1 ;;
+esac
+
+# Where to cut: the first lace that starts at or after $t. In Matroska, audio frames are grouped
+# in laces; all frames of a lace share the lace's byte position, and often only the first one
+# has a timestamp. So cut by byte position at a lace start (the first packet with a new
+# position) and start the output timestamps at that packet's time. MP4 has no laces: every
+# packet then counts as a lace start. TrueHD frames before the first major sync
+# are counted and played as silence by atmos-render, so the timing stays exact.
+pre=$(awk -v t="$t" 'BEGIN { s = t - 0.5; print (s < 0 ? 0 : s) }')
+IFS=, read -r first pos < <(ffprobe -v error -read_intervals "${pre}%+3" -select_streams "$idx" \
+        -show_entries packet=pts_time,pos -of csv=p=0 "$in" |
+        awk -F, -v t="$t" '$2 != prev && $1 != "N/A" && $1 + 0 >= t - 0.0001 { print $1 "," $2; exit } { prev = $2 }') || true
+[[ -n ${first:-} ]] || first="$t"
+if [[ ${pos:-N/A} =~ ^[0-9]+$ ]]; then
+    cut="noise=drop=lt(pos\\,$pos)"
+else
+    cut="noise=drop=lt(pts*tb\\,$first-0.0002)"   # no byte positions: cut by timestamp
+fi
+
+# Stage 1 is noisy for raw TrueHD (harmless "non monotonically increasing dts" messages)
+ffmpeg -nostdin -v error -copyts -ss "$pre" -i "$in" -map "0:$idx" -c copy \
+       -bsf:a "$cut" -f "$fmt" - 2> >(grep -v "non monotonically increasing dts" >&2) |
+    atmos-render --format "$fmt" - |
+    ffmpeg -nostdin -v error -f f32le -ar "$rate" -ch_layout "FL+FR+FC+LFE+BL+BR+SL+SR+TFL+TFR+TBL+TBR" -i - \
+           -output_ts_offset "$(awk -v f="$first" -v s="$shift" 'BEGIN { printf "%.6f", f - s }')" -c:a wavpack -compression_level 0 -metadata:s:a:0 title="Atmos 7.1.4 (live)" \
+           -flush_packets 1 -f nut -
